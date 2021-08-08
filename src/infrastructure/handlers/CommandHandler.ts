@@ -1,4 +1,4 @@
-import { CardFactory, MessageFactory, TeamsInfo, TurnContext } from "botbuilder";
+import { ActionTypes, CardFactory, MessageFactory, TeamsInfo, TurnContext } from "botbuilder";
 import { IDependencies } from "../BotActivityHandler";
 import { helpCard } from "../cards/helpCard";
 import { identityCard } from "../cards/identityCard";
@@ -16,21 +16,23 @@ const Actions: { [key: string]: string } = {
   SHOW_TARGETED_BUBBLE: "show targeted bubble",
   SHOW_BUBBLE_CLOSE: "show closing bubble",
   SHOW_REFRESH: "show refresh",
+  SHOW_SUGGESTED_ACTIONS: "show suggested actions",
   START_ACTIVITY: "start activity",
   CONFIRM_ANONYMOUS_IDENTITY: "confirm identity",
   MEETING_IS_DONE: "meeting is done",
   HELP: "help",
-  MONITOR: "monitor participants"
+  MONITOR: "monitor participants",
 };
-const COMPLETE_ACTIVITY = "complete activity"
-
+const COMPLETE_ACTIVITY = "complete activity";
 export class CommandHandler {
-  static Actions = Actions
+  static Actions = Actions;
 
-  constructor(private deps: IDependencies,
+  constructor(
+    private deps: IDependencies,
     private activityHandler: ActivityHandler,
     private bubbleDemoHandler: BubbleDemoHandler,
-    private targetedBubbleDemoHandler: TargetedBubbleHandler) { }
+    private targetedBubbleDemoHandler: TargetedBubbleHandler
+  ) {}
 
   async handleCommand(command: string, context: TurnContext) {
     switch (command) {
@@ -55,6 +57,9 @@ export class CommandHandler {
       case Actions.SHOW_BUBBLE_CLOSE:
         await this.bubbleDemoHandler.showClosingBubbleAsync(context);
         break;
+      case Actions.SHOW_SUGGESTED_ACTIONS:
+        await this.showSuggestedActionsAsync(context);
+        break;
       case Actions.CONFIRM_ANONYMOUS_IDENTITY:
         await this.confirmAnonymousIdentityAsync(context);
         break;
@@ -62,13 +67,13 @@ export class CommandHandler {
         await this.activityHandler.startActivityAsync(context);
         break;
       case COMPLETE_ACTIVITY:
-        await this.activityHandler.completeActivityAsync(context)
-        break
+        await this.activityHandler.completeActivityAsync(context);
+        break;
       case Actions.MEETING_IS_DONE:
-        await this.meetingIsDoneAsync(context)
-        break
+        await this.meetingIsDoneAsync(context);
+        break;
       case Actions.MONITOR:
-        await this.monitorAsync(context)
+        await this.monitorAsync(context);
       default:
         await this.helpActivityAsync(context, command);
     }
@@ -76,11 +81,11 @@ export class CommandHandler {
 
   async meetingIsDoneAsync(context: TurnContext) {
     const replyActivity = MessageFactory.text("Meeting is done!"); // this could be an adaptive card instead
-    const img = encodeURIComponent("https://i.imgur.com/RbCKrf8.gif")
-    const url = `${process.env.BaseUrl}/bubble/meeting-is-done.html?message=${img}`
+    const img = encodeURIComponent("https://i.imgur.com/RbCKrf8.gif");
+    const url = `${process.env.BaseUrl}/bubble/meeting-is-done.html?message=${img}`;
     const encodedUrl = encodeURIComponent(url as string);
-    const height = 500
-    const width = 400
+    const height = 500;
+    const width = 400;
     replyActivity.channelData = {
       notification: {
         alertInMeeting: true,
@@ -91,17 +96,15 @@ export class CommandHandler {
   }
 
   private async monitorAsync(context: TurnContext) {
-    const participants = await TeamsInfo.getMembers(context)
-    const names = participants.map(p => p.name).join(", ")
-    console.log(names)
-    setTimeout(() => this.monitorAsync(context).then(() => { }), 10000)
+    const participants = await TeamsInfo.getMembers(context);
+    const names = participants.map((p) => p.name).join(", ");
+    console.log(names);
+    setTimeout(() => this.monitorAsync(context).then(() => {}), 10000);
   }
 
   private async confirmAnonymousIdentityAsync(context: TurnContext) {
     const userId = context.activity.from.id;
-    const msa =
-      this.deps.identityManager.getIdentityFromUserId(userId) ||
-      "No MSA mapping found";
+    const msa = this.deps.identityManager.getIdentityFromUserId(userId) || "No MSA mapping found";
     const card = CardFactory.adaptiveCard(identityCard(msa, userId));
     await context.sendActivity({ attachments: [card] });
   }
@@ -115,19 +118,41 @@ export class CommandHandler {
     const member = await TeamsInfo.getMember(context, context.activity.from.id);
     const members = await TeamsInfo.getMembers(context);
     const ids = members.map((member) => member.id);
-    const card = CardFactory.adaptiveCard(
-      refreshCard("Initial message", member.name, ids)
-    );
+    const card = CardFactory.adaptiveCard(refreshCard("Initial message", member.name, ids));
     await context.sendActivity({ attachments: [card] });
   }
+
+  private async showSuggestedActionsAsync(context: TurnContext) {
+    const activity = MessageFactory.text("I sent suggested actions");
+    const generateActivity = () => {
+      let count = 5;
+      const actions = [];
+      for (let i = 1; i <= count; i++) {
+        actions.push({
+          type: ActionTypes.ImBack,
+          title: "Suggested Action " + i,
+          value: "Here is the bot suggested action " + i,
+        });
+      }
+      activity.suggestedActions = {
+        actions,
+        to: [context.activity.from.id],
+      };
+      return activity;
+    };
+    await context.sendActivity(generateActivity());
+  }
+
   async signInAsync(context: TurnContext): Promise<void> {
     // https://github.com/microsoft/BotBuilder-Samples/blob/main/samples/javascript_nodejs/46.teams-auth/bots/dialogBot.js
-    const card = CardFactory.adaptiveCard({ signinCard, });
+    const card = CardFactory.adaptiveCard({ signinCard });
     await context.sendActivity({ attachments: [card] });
   }
 
   private async helpActivityAsync(context: TurnContext, text: string) {
     const card = CardFactory.adaptiveCard(helpCard(Actions, text));
-    await context.sendActivity({ attachments: [card] });
+    await context.sendActivity({
+      attachments: [card],
+    });
   }
 }
