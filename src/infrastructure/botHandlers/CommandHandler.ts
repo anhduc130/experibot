@@ -4,9 +4,9 @@ import { helpCard } from "../cards/helpCard";
 import { identityCard } from "../cards/identityCard";
 import { openTaskModuleCard } from "../cards/openTaskModuleCard";
 import { refreshCard } from "../cards/refreshCard";
-import * as signinCard from "../cards/signinCard.json";
 import { ActivityHandler } from "./ActivityHandler";
 import { BubbleDemoHandler } from "./BubbleDemoHandler";
+import { PaymentInMeetingHandler } from "./PaymentInMeetingHandler";
 import { TargetedBubbleHandler } from "./TargetedBubbleHandler";
 
 const Actions: { [key: string]: string } = {
@@ -24,6 +24,8 @@ const Actions: { [key: string]: string } = {
   MONITOR: "monitor participants",
 };
 const COMPLETE_ACTIVITY = "complete activity";
+const COMPLETE_PAYMENT = "complete payment";
+
 export class CommandHandler {
   static Actions = Actions;
 
@@ -31,16 +33,14 @@ export class CommandHandler {
     private deps: IDependencies,
     private activityHandler: ActivityHandler,
     private bubbleDemoHandler: BubbleDemoHandler,
-    private targetedBubbleDemoHandler: TargetedBubbleHandler
+    private targetedBubbleDemoHandler: TargetedBubbleHandler,
+    private paymentHandler: PaymentInMeetingHandler
   ) {}
 
   async handleCommand(command: string, context: TurnContext) {
     switch (command) {
       case Actions.HELP:
         await this.helpActivityAsync(context, command);
-        break;
-      case Actions.SIGNIN:
-        await this.signInAsync(context);
         break;
       case Actions.SHOW_REFRESH:
         await this.showRefreshCardAsync(context);
@@ -111,7 +111,20 @@ export class CommandHandler {
 
   private async showTaskModuleAsync(context: TurnContext) {
     const card = CardFactory.adaptiveCard(openTaskModuleCard());
-    await context.sendActivity({ attachments: [card] });
+    this.deps.logger.log(`From: ${JSON.stringify(context.activity.from, null, 2)}`);
+    await context.sendActivity({
+      attachments: [card],
+      suggestedActions: {
+        actions: [
+          {
+            title: "green",
+            type: "imBack",
+            value: "green",
+          },
+        ],
+        to: [context.activity.from.id],
+      },
+    });
   }
 
   private async showRefreshCardAsync(context: TurnContext) {
@@ -141,12 +154,6 @@ export class CommandHandler {
       return activity;
     };
     await context.sendActivity(generateActivity());
-  }
-
-  async signInAsync(context: TurnContext): Promise<void> {
-    // https://github.com/microsoft/BotBuilder-Samples/blob/main/samples/javascript_nodejs/46.teams-auth/bots/dialogBot.js
-    const card = CardFactory.adaptiveCard({ signinCard });
-    await context.sendActivity({ attachments: [card] });
   }
 
   private async helpActivityAsync(context: TurnContext, text: string) {

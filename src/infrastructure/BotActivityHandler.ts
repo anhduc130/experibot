@@ -13,15 +13,16 @@ import { } from "botbuilder-dialogs";
 
 import { ILogger } from "../domain/ILogger";
 import { IdentityManager } from "../domain/IdentityManager";
-import { ActivityHandler } from "./handlers/ActivityHandler";
-import { CommandHandler } from "./handlers/CommandHandler";
-import { MessagingExtensionHandler } from "./handlers/MessagingExtensionDemoHandler";
-import { RefreshHandler } from "./handlers/RefreshHandler";
-import { AuthenticationHandler } from "./handlers/AuthenticationInAppHandler";
-import { ChainedTaskModulesHandler } from "./handlers/ChainedTaskModulesHandler";
-import e = require("express");
-import { BubbleDemoHandler } from "./handlers/BubbleDemoHandler";
-import { TargetedBubbleHandler } from "./handlers/TargetedBubbleHandler";
+import { ActivityHandler } from "./botHandlers/ActivityHandler";
+import { CommandHandler } from "./botHandlers/CommandHandler";
+import { MessagingExtensionHandler } from "./botHandlers/MessagingExtensionDemoHandler";
+import { RefreshHandler } from "./botHandlers/RefreshHandler";
+import { AuthenticationHandler } from "./botHandlers/AuthenticationInAppHandler";
+import { ChainedTaskModulesHandler } from "./botHandlers/ChainedTaskModulesHandler";
+import { BubbleDemoHandler } from "./botHandlers/BubbleDemoHandler";
+import { TargetedBubbleHandler } from "./botHandlers/TargetedBubbleHandler";
+import { PaymentInMeetingHandler } from "./botHandlers/PaymentInMeetingHandler";
+import { confirmActionCard } from "./cards/confirmActionCard";
 
 export interface IDependencies {
   logger: ILogger;
@@ -30,6 +31,7 @@ export interface IDependencies {
 
 const INVOKE_REFRESH = "refreshCard";
 const INVOKE_START_ACTIVITY = "startActivity";
+const HANDLER_PAYMENT = "payments"
 
 export class BotActivityHandler extends TeamsActivityHandler {
   private activityHandler: ActivityHandler
@@ -40,6 +42,7 @@ export class BotActivityHandler extends TeamsActivityHandler {
   private chainedTaskModuleHandler: ChainedTaskModulesHandler
   private bubbleDemoHandler: BubbleDemoHandler
   private targetedBubbleDemoHandler: TargetedBubbleHandler
+  private paymentHandler: PaymentInMeetingHandler
 
   constructor(private deps: IDependencies) {
     super();
@@ -53,10 +56,12 @@ export class BotActivityHandler extends TeamsActivityHandler {
     this.activityHandler = new ActivityHandler(deps)
     this.bubbleDemoHandler = new BubbleDemoHandler()
     this.targetedBubbleDemoHandler = new TargetedBubbleHandler()
+    this.paymentHandler = new PaymentInMeetingHandler(deps)
     this.commandHandler = new CommandHandler(deps,
       this.activityHandler,
       this.bubbleDemoHandler,
-      this.targetedBubbleDemoHandler)
+      this.targetedBubbleDemoHandler,
+      this.paymentHandler)
     this.messagingExtensionHandler = new MessagingExtensionHandler(deps, this.commandHandler)
     this.refreshHandler = new RefreshHandler(deps)
     this.authenticationHandler = new AuthenticationHandler(deps)
@@ -73,7 +78,7 @@ export class BotActivityHandler extends TeamsActivityHandler {
     this.deps.logger.debug(`Invoke of type `, context.activity.name);
 
     if (context.activity.name === "adaptiveCard/action") {
-      return await this.handleAdaptiveCardAction(context);
+      return await this.handleAdaptiveCardActionV2(context);
     }
 
     try {
@@ -86,15 +91,23 @@ export class BotActivityHandler extends TeamsActivityHandler {
     }
   }
 
-  async handleAdaptiveCardAction(context: TurnContext): Promise<InvokeResponse> {
+  async handleAdaptiveCardActionV2(context: TurnContext): Promise<InvokeResponse> {
     if (context.activity?.value?.action?.verb === INVOKE_REFRESH) {
       return await this.refreshHandler.handleRefreshCard(context);
     } else if (context.activity?.value?.action?.verb === INVOKE_START_ACTIVITY) {
       return await this.activityHandler.handleRefreshAsync(context)
+    } else if (context.activity?.value?.action?.data?.handler === HANDLER_PAYMENT) {
+      return await this.paymentHandler.handleRefreshAsync(context)
     }
-    throw Error(
-      `Verb not implemented: ${context.activity.value?.action?.verb}`
-    );
+    this.deps.logger.error(`Verb not implemented: ${context.activity.value?.action?.verb}. Activity was:`, JSON.stringify(context.activity, null, 2))
+    return {
+      status: 200,
+      body: {
+        statusCode: 200,
+        type: "application/vnd.microsoft.card.adaptive",
+        value: confirmActionCard(`There was a bug in the adaptive card handler.`),
+      },
+    }
   }
 
   async handleTeamsTaskModuleSubmit(
@@ -102,11 +115,15 @@ export class BotActivityHandler extends TeamsActivityHandler {
     taskModuleRequest: TaskModuleRequest
   ): Promise<TaskModuleResponse> {
     this.deps.logger.debug(
-      `Task module was submitted with action: ${taskModuleRequest.data.button}`
+      `Task module was submitted with module: ${taskModuleRequest.data.moduleName}`
     );
-    if (taskModuleRequest.data.moduleName === "chained") {
-      return this.chainedTaskModuleHandler.processTaskModuleRequest(taskModuleRequest)
+    this.deps.logger.debug(`Message was `, taskModuleRequest)
+    if (taskModuleRequest.data.moduleName === "payment") {
+      return this.paymentHandler.completePaymentAsync(context, taskModuleRequest)
+    } else if (taskModuleRequest.data.moduleName === "chained") {
+      return await this.chainedTaskModuleHandler.processTaskModuleRequest(taskModuleRequest)
     }
+    this.deps.logger.debug(`Message was `, taskModuleRequest)
     throw Error("Not supported: " + taskModuleRequest.data)
   }
 
@@ -118,7 +135,10 @@ export class BotActivityHandler extends TeamsActivityHandler {
       "Returning task module of type",
       taskModuleRequest.data.module
     );
-    if (taskModuleRequest.data?.module === "authentication") {
+    if (taskModuleRequest.data?.module === "payment") {
+      return this.paymentHandler.fetchPaymentTaskModule(context)
+    }
+    else if (taskModuleRequest.data?.module === "authentication") {
       return (this.authenticationHandler.fetchAuthenticationTaskModule(context) as TaskModuleResponse);
     } else {
       return this.chainedTaskModuleHandler.fetchTaskModule();
@@ -151,13 +171,23 @@ export class BotActivityHandler extends TeamsActivityHandler {
     context: TurnContext,
     action: MessagingExtensionAction
   ): Promise<MessagingExtensionActionResponse> {
-    return this.messagingExtensionHandler.showMessageExtension(context, action)
+    if (action.commandId === "demoAction") {
+      return this.messagingExtensionHandler.showMessageExtension(context, action)
+    } else if (action.commandId === "triggerPayment") {
+      return this.paymentHandler.showMessagingExtension(context, action)
+    } else {
+      throw Error("Unknown messaging extension command: " + context.activity.value.commandId)
+    }
   }
 
   async handleTeamsMessagingExtensionSubmitAction(
     context: TurnContext,
     action: MessagingExtensionAction
   ): Promise<MessagingExtensionActionResponse> {
-    return this.messagingExtensionHandler.defaultMessageExtensionSubmitted(context, action)
+    if (action.commandId === "triggerPayment") {
+      return this.paymentHandler.paymentRequestSubmitted(context, action)
+    } else {
+      return this.messagingExtensionHandler.defaultMessageExtensionSubmitted(context, action)
+    }
   }
 }

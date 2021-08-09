@@ -1,7 +1,7 @@
 {
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.8/MicrosoftTeams.schema.json",
   "manifestVersion": "1.8",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "id": "f8092768-9751-4d66-99a2-929f34ec8b1f",
   "packageName": "com.template.bot.ts",
   "developer": {
@@ -29,12 +29,14 @@
       "scopes": ["personal", "groupchat", "team"],
       "commandLists": [
         {
-          "scopes": ["personal"],
           "commands": [
             {
-              "title": "help",
-              "description": "help"
+              "description": "Get help",
+              "title": "Help"
             }
+          ],
+          "scopes": [
+            "personal"
           ]
         }
       ],
@@ -52,32 +54,17 @@
           "context": ["compose"],
           "description": "Command to run action to create a Card from Compose Box",
           "title": "Demo card",
-          "fetchTask": true,
-          "taskInfo": {
-            "url": "https://rlayserver.azurewebsites.net/bubble/",
-            "width": "medium",
-            "height": "medium"
-          },
-          "parameters": [
-            {
-              "name": "title",
-              "title": "Card title",
-              "description": "This is a demo action",
-              "inputType": "text"
-            },
-            {
-              "name": "subTitle",
-              "title": "Subtitle",
-              "description": "It has a subtitle",
-              "inputType": "text"
-            },
-            {
-              "name": "text",
-              "title": "Text",
-              "description": "Text for the card",
-              "inputType": "textarea"
-            }
-          ]
+          "fetchTask": true
+        },
+        {
+          "id": "triggerPayment",
+          "type": "action",
+          "context": [
+            "compose"
+          ],
+          "description": "Send a payment request",
+          "title": "Send payment",
+          "fetchTask": true
         }
       ]
     }
@@ -95,8 +82,10 @@
       "contentUrl": "https://rlayserver.azurewebsites.net:443/bookings/?theme={theme}",
       "websiteUrl": "https://rlayserver.azurewebsites.net:443/bookings/?theme={theme}",
       "entityId": "StaticTab",
-      "name": "My bookings static tab",
-      "scopes": ["personal"]
+      "name": "Appointments",
+      "scopes": [
+        "personal"
+      ]
     }
   ],
   "permissions": ["identity", "messageTeamMembers"],
