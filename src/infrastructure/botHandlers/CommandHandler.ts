@@ -1,4 +1,4 @@
-import { ActionTypes, CardFactory, MessageFactory, TeamsInfo, TurnContext } from "botbuilder";
+import { ActionTypes, CardAction, CardFactory, MessageFactory, TeamsInfo, TurnContext } from "botbuilder";
 import { IDependencies } from "../BotActivityHandler";
 import { helpCard } from "../cards/helpCard";
 import { identityCard } from "../cards/identityCard";
@@ -9,22 +9,93 @@ import { BubbleDemoHandler } from "./BubbleDemoHandler";
 import { PaymentInMeetingHandler } from "./PaymentInMeetingHandler";
 import { TargetedBubbleHandler } from "./TargetedBubbleHandler";
 
+interface ISuggestedActionList {
+  [key: string]: {
+    message: string;
+    actions: CardAction[];
+  };
+}
+
 const Actions: { [key: string]: string } = {
-  SIGNIN: "signin",
-  SHOW_TASK_MODULE: "show task module",
-  SHOW_BUBBLE: "show bubble",
-  SHOW_TARGETED_BUBBLE: "show targeted bubble",
-  SHOW_BUBBLE_CLOSE: "show closing bubble",
-  SHOW_REFRESH: "show refresh",
-  SHOW_SUGGESTED_ACTIONS: "show suggested actions",
-  START_ACTIVITY: "start activity",
-  CONFIRM_ANONYMOUS_IDENTITY: "confirm identity",
-  MEETING_IS_DONE: "meeting is done",
+  // SIGNIN: "signin",
+  // SHOW_TASK_MODULE: "show task module",
+  // SHOW_BUBBLE: "show bubble",
+  // SHOW_TARGETED_BUBBLE: "show targeted bubble",
+  // SHOW_BUBBLE_CLOSE: "show closing bubble",
+  // SHOW_REFRESH: "show refresh",
+  SHOW_SUGGESTED_ACTIONS: "IT Support",
+  A1: "Finance",
+  A2: "Human Resources",
+  A3: "R&D",
+  // START_ACTIVITY: "start activity",
+  // CONFIRM_ANONYMOUS_IDENTITY: "confirm identity",
+  // MEETING_IS_DONE: "meeting is done",
   HELP: "help",
-  MONITOR: "monitor participants",
+  // MONITOR: "monitor participants",
 };
 const COMPLETE_ACTIVITY = "complete activity";
 const COMPLETE_PAYMENT = "complete payment";
+
+const suggestedActionList: ISuggestedActionList = {
+  [Actions.SHOW_SUGGESTED_ACTIONS.toLowerCase()]: {
+    message: "Hi! Thanks for contacting IT Support. How can I help you today?",
+    actions: [
+      {
+        type: "imBack",
+        title: "Equipment request",
+        value: "Equipment request",
+      },
+      {
+        type: "imBack",
+        title: "Software licenses",
+        value: "Software licenses",
+      },
+      {
+        type: "imBack",
+        title: "Access rights",
+        value: "Access rights",
+      },
+    ],
+  },
+  "access rights": {
+    message: "Thanks. What would you like to do?",
+    actions: [
+      {
+        type: "imBack",
+        title: "I need more access",
+        value: "I need more access",
+      },
+      {
+        type: "imBack",
+        title: "I request access for someone else",
+        value: "I request access for someone else",
+      },
+    ],
+  },
+  "i need more access": {
+    message: "Thanks. To request more access, please visit: //myaccess. You will need an approval from your manager.",
+    actions: [],
+  },
+  yes: {
+    message: "Great! Thank you for using our bot service. 😄",
+    actions: [],
+  },
+  doesItHelp: {
+    message: "Does it help?",
+    actions: [
+      {
+        type: "imBack",
+        title: "Yes",
+        value: "Yes",
+      },
+      {
+        type: "imBack",
+        title: "No, please connect me with an agent",
+        value: "No, please connect me with an agent",
+      },
+    ],
+  },
+};
 
 export class CommandHandler {
   static Actions = Actions;
@@ -57,8 +128,11 @@ export class CommandHandler {
       case Actions.SHOW_BUBBLE_CLOSE:
         await this.bubbleDemoHandler.showClosingBubbleAsync(context);
         break;
-      case Actions.SHOW_SUGGESTED_ACTIONS:
-        await this.showSuggestedActionsAsync(context);
+      case Actions.SHOW_SUGGESTED_ACTIONS.toLowerCase():
+      case "access rights":
+      case "i need more access":
+      case "yes":
+        await this.showSuggestedActionsAsync(context, command);
         break;
       case Actions.CONFIRM_ANONYMOUS_IDENTITY:
         await this.confirmAnonymousIdentityAsync(context);
@@ -75,7 +149,7 @@ export class CommandHandler {
       case Actions.MONITOR:
         await this.monitorAsync(context);
       default:
-        await this.helpActivityAsync(context, command);
+      // await this.helpActivityAsync(context, command);
     }
   }
 
@@ -135,25 +209,22 @@ export class CommandHandler {
     await context.sendActivity({ attachments: [card] });
   }
 
-  private async showSuggestedActionsAsync(context: TurnContext) {
-    const activity = MessageFactory.text("I sent suggested actions");
-    const generateActivity = () => {
-      let count = 5;
-      const actions = [];
-      for (let i = 1; i <= count; i++) {
-        actions.push({
-          type: ActionTypes.ImBack,
-          title: "Suggested Action " + i,
-          value: "Here is the bot suggested action " + i,
-        });
-      }
-      activity.suggestedActions = {
-        actions,
-        to: [context.activity.from.id],
-      };
+  private async showSuggestedActionsAsync(context: TurnContext, command: string) {
+    const buildActivity = (key: string) => {
+      const { message, actions } = suggestedActionList[key];
+      const to = [context.activity.from.id];
+      const activity = MessageFactory.text(message);
+      activity.suggestedActions = { actions, to };
       return activity;
     };
-    await context.sendActivity(generateActivity());
+
+    const activities = [buildActivity(command)];
+
+    if (command === "i need more access") {
+      activities.push(...[{ type: "delay", value: 500 }, buildActivity("doesItHelp")]);
+    }
+
+    await context.sendActivities(activities);
   }
 
   private async helpActivityAsync(context: TurnContext, text: string) {

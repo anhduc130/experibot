@@ -2,7 +2,7 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.8/MicrosoftTeams.schema.json",
   "manifestVersion": "1.8",
   "version": "1.0.2",
-  "id": "f8092768-9751-4d66-99a2-929f34ec8b1f",
+  "id": "b225fa73-2069-439e-b30f-d08887faab9b",
   "packageName": "com.template.bot.ts",
   "developer": {
     "name": "Teams App, Inc.",
@@ -25,7 +25,7 @@
   "accentColor": "#FFFFFF",
   "bots": [
     {
-      "botId": "f8092768-9751-4d66-99a2-929f34ec8b1f",
+      "botId": "b225fa73-2069-439e-b30f-d08887faab9b",
       "scopes": ["personal", "groupchat", "team"],
       "commandLists": [
         {
@@ -46,7 +46,7 @@
   ],
   "composeExtensions": [
     {
-      "botId": "f8092768-9751-4d66-99a2-929f34ec8b1f",
+      "botId": "b225fa73-2069-439e-b30f-d08887faab9b",
       "commands": [
         {
           "id": "demoAction",
