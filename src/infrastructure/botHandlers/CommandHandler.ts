@@ -217,14 +217,26 @@ export class CommandHandler {
       activity.suggestedActions = { actions, to };
       return activity;
     };
+    const buildEditedActivity = (key: string) => {
+      const { message, actions } = suggestedActionList[key];
+      const to = [context.activity.from.id];
+      const activity = MessageFactory.text(`[Edited] ${message}`);
+      activity.suggestedActions = { actions, to };
+      return activity;
+    };
 
     const activities = [buildActivity(command)];
 
-    if (command === "i need more access") {
-      activities.push(...[{ type: "delay", value: 500 }, buildActivity("doesItHelp")]);
-    }
-
     await context.sendActivities(activities);
+
+    if (command === "i need more access") {
+      const response = await context.sendActivity(buildActivity("doesItHelp"));
+      const newActivity = buildEditedActivity("doesItHelp");
+      newActivity.id = response?.id;
+
+      // UpdateActivityAsync(): A method that can participate in update activity events for the current turn.
+      await context.updateActivity(newActivity);
+    }
   }
 
   private async helpActivityAsync(context: TurnContext, text: string) {
