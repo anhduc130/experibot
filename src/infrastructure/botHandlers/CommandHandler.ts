@@ -95,6 +95,21 @@ const suggestedActionList: ISuggestedActionList = {
       },
     ],
   },
+  doesItHelpEdit: {
+    message: "[Edit] Does it help?",
+    actions: [
+      {
+        type: "imBack",
+        title: "[Edit] Yes",
+        value: "[Edit] Yes",
+      },
+      {
+        type: "imBack",
+        title: "[Edit] No, please connect me with an agent",
+        value: "[Edit] No, please connect me with an agent",
+      },
+    ],
+  },
 };
 
 export class CommandHandler {
@@ -217,13 +232,6 @@ export class CommandHandler {
       activity.suggestedActions = { actions, to };
       return activity;
     };
-    const buildEditedActivity = (key: string) => {
-      const { message, actions } = suggestedActionList[key];
-      const to = [context.activity.from.id];
-      const activity = MessageFactory.text(`[Edited] ${message}`);
-      activity.suggestedActions = { actions, to };
-      return activity;
-    };
 
     const activities = [buildActivity(command)];
 
@@ -231,10 +239,11 @@ export class CommandHandler {
 
     if (command === "i need more access") {
       const response = await context.sendActivity(buildActivity("doesItHelp"));
-      const newActivity = buildEditedActivity("doesItHelp");
-      newActivity.id = response?.id;
 
-      // UpdateActivityAsync(): A method that can participate in update activity events for the current turn.
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+
+      const newActivity = buildActivity("doesItHelpEdit");
+      newActivity.id = response?.id;
       await context.updateActivity(newActivity);
     }
   }
